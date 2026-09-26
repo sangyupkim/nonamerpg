@@ -39,7 +39,7 @@ export const BAG_SLOTS = 20;
 export const STACK_SIZE = 50;
 
 /** 화면에 보이는 게임 버전 (업데이트마다 올린다) */
-export const GAME_VERSION = '10.2';
+export const GAME_VERSION = '10.3';
 declare const __BUILD_ID__: string;
 /** 빌드 번호 (테스트에서는 dev) */
 export const BUILD_ID: string = typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev';

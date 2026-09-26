@@ -595,6 +595,12 @@ export class Hud {
     this.minimapSlot.replaceChildren(...(canvas ? [canvas] : []));
   }
 
+  /** 채집 버튼을 꾹 누르는 정도 (0~1, 자동 채집까지). 음수면 끈다 */
+  setInteractCharge(k: number): void {
+    this.interactBtn.classList.toggle('charging', k >= 0);
+    if (k >= 0) this.interactBtn.style.setProperty('--charge', `${Math.round(Math.min(1, k) * 360)}deg`);
+  }
+
   /** 가까이에 상호작용할 대상이 있으면 상호작용 버튼이 나타난다 (공격 버튼은 그대로) */
   setInteract(label: string | null): void {
     if (label === this.lastInteract) return;

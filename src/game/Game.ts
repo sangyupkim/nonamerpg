@@ -103,6 +103,9 @@ const POTION_POUCH = 10;
 /** 보물 상자가 고급 상자일 확률 */
 const AMBUSH_CHANCE = 0.3;
 const POTION_COOLDOWN = 8;
+/** 자동 채집: 꾹 누르는 시간(초)과 시작한 자리에서 캘 반경 */
+const AUTO_GATHER_HOLD = 3;
+const AUTO_GATHER_RANGE = 12;
 
 export class Game {
   private renderer: WebGLRenderer;
@@ -455,6 +458,9 @@ export class Game {
     this.progress.atHome = level instanceof HomeScene;
     this.buildMode(false);
     this.gathering = null;
+    this.autoGather = null;
+    this.gatherHold = 0;
+    this.hud.setInteractCharge(-1);
     this.makePlayer(level.playerStart.x, level.playerStart.z, level.playerStart.facing);
     this.camTarget.set(level.playerStart.x, 0, level.playerStart.z);
     level.sun.castShadow = this.progress.data.settings.shadows;
@@ -2877,6 +2883,95 @@ export class Game {
     );
   }
 
+  // ---------------- 자동 채집 ----------------
+  private gatherHold = 0;
+  /** 자동 채집: 시작한 자리, 캔 수, 못 캐는 채집물, 지금 걸어가는 채집물과 막힘 */
+  private autoGather: { x: number; z: number; done: number; skip: Set<NodeInstance>; target: NodeInstance | null; best: number; stuck: number } | null = null;
+
+  private startAutoGather(): void {
+    const pl = this.player;
+    this.gatherHold = 0;
+    this.hud.setInteractCharge(-1);
+    this.autoGather = { x: pl.position.x, z: pl.position.z, done: 0, skip: new Set(), target: this.gathering, best: Infinity, stuck: 0 };
+    this.audio.play('level');
+    this.level.effects.ring(pl.position.x, pl.position.z, AUTO_GATHER_RANGE, 0x8aff9a, 0.6, 0.1);
+    this.hud.toast(`자동 채집 시작 — 반경 ${AUTO_GATHER_RANGE}m 안의 광맥·나무를 모두 캡니다 (움직이거나 몬스터가 오면 멈춤)`, 3000);
+  }
+
+  private stopAutoGather(msg?: string): void {
+    const a = this.autoGather;
+    if (!a) return;
+    this.autoGather = null;
+    this.gathering = null;
+    if (msg) this.hud.toast(`${msg} (${a.done}개 캠)`, 2200);
+  }
+
+  /** 자동 채집 한 프레임: 다음 채집물을 고르고 걸어간다. 이동 벡터(화면 기준)를 돌려준다 */
+  private updateAutoGather(dt: number): { x: number; y: number } {
+    const a = this.autoGather!;
+    const lv = this.level;
+    const pl = this.player;
+    const idle = { x: 0, y: 0 };
+    if (!(lv instanceof DungeonScene) || !this.run) {
+      this.autoGather = null;
+      return idle;
+    }
+    if (lv.monsterNear(pl.position.x, pl.position.z)) {
+      this.stopAutoGather('몬스터가 가까이 있어 자동 채집을 멈췄습니다');
+      return idle;
+    }
+    // 캐는 중이면 그대로 (updateGather가 캔다)
+    if (this.gathering && this.gathering.alive && this.gathering.dying === 0) return idle;
+    let t = a.target;
+    if (!t || !t.alive || t.dying > 0 || a.skip.has(t)) {
+      if (t && (!t.alive || t.dying > 0)) a.done++;
+      // 시작한 자리에서 가까운 것 중, 지금 나와 가장 가까운 채집물 (보물 상자는 습격이 있어 빼고)
+      t = null;
+      let bd = Infinity;
+      for (const n of lv.nodes) {
+        if (!n.alive || n.dying > 0 || n.def.style === 'chest' || a.skip.has(n)) continue;
+        if (Math.hypot(n.x - a.x, n.z - a.z) > AUTO_GATHER_RANGE) continue;
+        const d = Math.hypot(n.x - pl.position.x, n.z - pl.position.z);
+        if (d < bd) {
+          bd = d;
+          t = n;
+        }
+      }
+      a.target = t;
+      a.best = Infinity;
+      a.stuck = 0;
+      if (!t) {
+        const done = a.done;
+        this.autoGather = null;
+        this.gathering = null;
+        this.audio.play('coin');
+        this.hud.toast(`자동 채집 끝 — 주변 채집물을 모두 캤습니다 (${done}개)`, 2500);
+        return idle;
+      }
+    }
+    const dx = t.x - pl.position.x;
+    const dz = t.z - pl.position.z;
+    const d = Math.hypot(dx, dz);
+    const reach = t.def.radius + 1.5;
+    if (d <= reach) {
+      if (!pl.canAct) return idle;
+      this.startGather(t);
+      // 도구가 없거나 약해서 못 캐는 것은 건너뛴다
+      if (this.gathering !== t) a.skip.add(t);
+      return idle;
+    }
+    // 걸어가다 막혀서 1.2초 동안 가까워지지 않으면 그 채집물은 건너뛴다
+    if (d < a.best - 0.05) {
+      a.best = d;
+      a.stuck = 0;
+    } else if ((a.stuck += dt) > 1.2) {
+      a.skip.add(t);
+      return idle;
+    }
+    const k = 1 / d;
+    return { x: (dx * SCREEN_RIGHT.x + dz * SCREEN_RIGHT.z) * k, y: (dx * SCREEN_UP.x + dz * SCREEN_UP.z) * k };
+  }
+
   private gather(n: NodeInstance): void {
     if (!(this.level instanceof DungeonScene) || !this.run) return;
     this.progress.achAdd('gathers');
@@ -3517,12 +3612,31 @@ export class Game {
         }
       }
     } else if (!input.mouseMoveActive) this.mouseTarget = null;
+    // 자동 채집: 직접 움직이면 멈추고, 아니면 다음 채집물로 걸어간다
+    if (this.autoGather) {
+      if (Math.hypot(move.x, move.y) > 0.25) this.stopAutoGather('직접 움직여 자동 채집을 멈췄습니다');
+      else move = this.updateAutoGather(dt);
+    }
     const near = this.building ? null : this.nearestInteractable();
-    this.hud.setInteract(near ? near.label : null);
+    this.hud.setInteract(this.autoGather ? `자동 채집 ${this.autoGather.done}` : near ? near.label : null);
 
-    if (input.consume('interact') && near) {
-      near.action();
-      if (this.mode !== 'play') return;
+    if (input.consume('interact')) {
+      if (this.autoGather) this.stopAutoGather('자동 채집을 멈췄습니다');
+      else if (near) {
+        near.action();
+        if (this.mode !== 'play') return;
+      }
+    }
+    // 채집 버튼(키)을 3초 꾹 누르면 주변 채집물을 자동으로 모두 캔다
+    // 채집물 앞에서 누르기 시작했으면, 캐던 채집물이 다 캐져도 계속 누르고 있는 동안 센다
+    const canHold = !this.autoGather && this.level instanceof DungeonScene && !!this.run && input.held('interact') && (this.gatherHold > 0 || near?.id === 'node' || !!this.gathering);
+    if (canHold) {
+      this.gatherHold += dt;
+      this.hud.setInteractCharge(this.gatherHold / AUTO_GATHER_HOLD);
+      if (this.gatherHold >= AUTO_GATHER_HOLD) this.startAutoGather();
+    } else if (this.gatherHold > 0 || !input.held('interact')) {
+      this.gatherHold = 0;
+      this.hud.setInteractCharge(-1);
     }
     if (input.consume('dodge') && !this.building) {
       // 회피: 검사는 구르기, 마법사는 블링크(무적 없음), 궁수는 후방 도약(무적 + 덫)
@@ -3593,6 +3707,7 @@ export class Game {
     if ((this.attackBuffer > 0 || input.attackHeld) && !this.building && pl.canAct) {
       this.attackBuffer = 0;
       this.gathering = null;
+      if (this.autoGather) this.stopAutoGather('공격해서 자동 채집을 멈췄습니다');
       this.combat.basicAttack();
     }
     if (!this.building) this.updateGather(move);

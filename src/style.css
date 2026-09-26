@@ -3327,3 +3327,28 @@ button.awk-opt { cursor: pointer; }
 /* v10: 8장 '칠흑' 규칙 — 플레이어 둘레만 보인다 */
 .ch8-vignette { position: absolute; inset: 0; pointer-events: none; display: none; background: radial-gradient(circle at 50% 52%, transparent 14%, rgba(4, 0, 12, 0.7) 32%, rgba(2, 0, 8, 0.96) 55%); }
 body.ch8-dark .ch8-vignette { display: block; }
+
+/* 제작대: 왼쪽 = 지금 작업·예약, 오른쪽 = 만들 것 목록 (두 줄) */
+.panel.tall > .wb-split { flex: 1; min-height: 0; display: flex; gap: 10px; }
+.wb-left { flex: 0 0 34%; min-width: 0; overflow: auto; }
+.wb-left .wb-job { position: relative; align-items: flex-start; gap: 8px; padding: 8px; }
+.wb-left .wb-job > img.wb-ico { width: 30px; height: 30px; }
+.wb-left .wb-job .wb-main > div:first-child { padding-right: 44px; }
+.wb-left .wb-job [data-cancel] { position: absolute; top: 6px; right: 6px; padding: 3px 7px; font-size: 11px; min-width: 0; }
+.wb-left .wb-queue li > span { flex: 1; min-width: 0; }
+.wb-left .wb-queue { display: flex; flex-direction: column; gap: 4px; }
+.wb-right { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.wb-tabs { flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.wb-tabs button { flex: 1 1 auto; padding: 6px 8px; font-size: 13px; min-width: 0; }
+.wb-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.wb-body > .scroll, .wb-body > .list { flex: none; overflow: visible; max-height: none; }
+.wb-grid .list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.wb-grid .list li { margin: 0; flex-wrap: wrap; align-content: flex-start; }
+.wb-grid .list li > div { flex: 1 1 60%; min-width: 0; }
+.wb-grid .list li small { font-size: 11px; }
+.wb-grid .list li button { padding: 4px 8px; font-size: 12px; }
+.wb-grid .list li.empty { grid-column: 1 / -1; }
+@media (max-width: 560px) {
+  .panel.tall > .wb-split { flex-direction: column; }
+  .wb-left { flex: none; max-height: 40%; }
+}

@@ -3117,17 +3117,23 @@ export class Screens {
       `<div class="panel wide tall">
          <button class="close">${ICONS.close}</button>
          <h2>제작대 Lv.${lv} <small class="gold">${p.data.gold.toLocaleString()} G</small> <button class="tool-sm rot" data-rotate>↻ 방향 돌리기</button></h2>
-         ${jobHtml}${outHtml}
-         ${message ? `<div class="notice">${message}</div>` : ''}
-         <div class="tabs">
-           <button data-tab="plates" class="${tab === 'plates' ? 'on' : ''}">판 합성</button>
-           <button data-tab="assemble" class="${tab === 'assemble' ? 'on' : ''}">조립</button>
-           <button data-tab="tools" class="${tab === 'tools' ? 'on' : ''}">채집 도구</button>
-           <button data-tab="equip" class="${tab === 'equip' ? 'on' : ''}">장비</button>
-           ${p.flag('endgame') ? `<button data-tab="sets" class="${tab === 'sets' ? 'on' : ''}">◈ 세트</button>` : ''}
-           <button data-tab="level" class="${tab === 'level' ? 'on' : ''}">레벨업</button>
+         <div class="wb-split">
+           <div class="wb-left">
+             ${jobHtml}${outHtml}
+             ${message ? `<div class="notice">${message}</div>` : ''}
+           </div>
+           <div class="wb-right">
+             <div class="tabs wb-tabs">
+               <button data-tab="plates" class="${tab === 'plates' ? 'on' : ''}">판 합성</button>
+               <button data-tab="assemble" class="${tab === 'assemble' ? 'on' : ''}">조립</button>
+               <button data-tab="tools" class="${tab === 'tools' ? 'on' : ''}">채집 도구</button>
+               <button data-tab="equip" class="${tab === 'equip' ? 'on' : ''}">장비</button>
+               ${p.flag('endgame') ? `<button data-tab="sets" class="${tab === 'sets' ? 'on' : ''}">◈ 세트</button>` : ''}
+               <button data-tab="level" class="${tab === 'level' ? 'on' : ''}">레벨업</button>
+             </div>
+             <div class="wb-body ${tab === 'sets' || tab === 'level' ? '' : 'wb-grid'}">${body}</div>
+           </div>
          </div>
-         ${body}
        </div>`,
       onClose,
     );
